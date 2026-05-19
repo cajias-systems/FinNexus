@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinNexus - Arquitectura C4 Interactiva</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                        heading: ['Outfit', 'sans-serif'],
+                    },
+                    colors: {
+                        fin: {
+                            950: '#040608',
+                            900: '#0a0e14',
+                            800: '#141a23',
+                            700: '#1a202c',
+                            cyan: '#00f2ff',
+                            green: '#70ff00',
+                            red: '#ff4b4b',
+                            text: '#cbd5e0',
+                            muted: '#718096'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* CSS Framework y Estilos Personalizados */
+        body {
+            background-color: #040608;
+            color: #cbd5e0;
+            overflow-x: hidden;
+        }
+
+        /* * Chart Container Styling (Mandatory Requirement)
+         * Garantiza que los gráficos sean responsivos, centrados y no desborden.
+         */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px; /* Limita el ancho en pantallas grandes */
+            margin-left: auto;
+            margin-right: auto;
+            height: 350px; /* Altura base controlada */
+            max-height: 450px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 400px;
+            }
+        }
+
+        /* Utilidades para diagramas C4 en HTML/CSS puros (SIN SVG) */
+        .c4-node {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .c4-node:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -5px rgba(0, 242, 255, 0.2);
+            border-color: #00f2ff;
+        }
+        .c4-node.active {
+            border-color: #70ff00;
+            box-shadow: 0 0 0 2px rgba(112, 255, 0, 0.3);
+        }
+
+        /* Líneas conectoras HTML/CSS (alternativa a SVG) */
+        .connector-h {
+            height: 2px;
+            background: repeating-linear-gradient(to right, #4a5568, #4a5568 5px, transparent 5px, transparent 10px);
+            position: relative;
+        }
+        .connector-v {
+            width: 2px;
+            background: repeating-linear-gradient(to bottom, #4a5568, #4a5568 5px, transparent 5px, transparent 10px);
+            position: relative;
+        }
+        .arrow-right::after {
+            content: ''; position: absolute; right: -5px; top: -4px;
+            border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 6px solid #4a5568;
+        }
+        .arrow-down::after {
+            content: ''; position: absolute; bottom: -5px; left: -4px;
+            border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid #4a5568;
+        }
+        .arrow-up::after {
+            content: ''; position: absolute; top: -5px; left: -4px;
+            border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 6px solid #4a5568;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0a0e14; }
+        ::-webkit-scrollbar-thumb { background: #1a202c; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #2d3748; }
+
+        /* Hide sections */
+        .section-hidden { display: none; }
+        
+        .glow-text-cyan { text-shadow: 0 0 10px rgba(0, 242, 255, 0.5); }
+    </style>
+</head>
+<body class="flex flex-col md:flex-row min-h-screen">
+
+    <!-- Chosen Palette: Dark Slate, Cyan (#00f2ff), Neon Green (#70ff00) -->
+    <!-- Application Structure Plan: A Dashboard-style SPA with a persistent sidebar for navigation. The content is divided into logical, task-oriented views: 1. Overview (Introduction & Purpose), 2. C1 Context Map (Interactive block diagram for high-level actors/systems), 3. C2 Container Map (Interactive block diagram for tech stack), 4. Architectural Analysis (Visualizing CAP theorem and Trade-offs using Chart.js). This allows users to drill down from high-level business logic to technical implementation and theoretical justification, aligning with the C4 methodology. -->
+    <!-- Visualization & Content Choices: 
+         - Goal: Organize -> Vis/Presentation: HTML/CSS C4 diagrams (NO SVG). Interaction: Click nodes to view detailed textual justifications in a side panel. Justification: Emulates interactive C4 model tools directly in DOM.
+         - Goal: Compare -> Vis/Presentation: Chart.js Radar Chart. Interaction: Tooltips. Justification: Perfectly illustrates the CAP theorem trade-offs between the QR module (AP) and Investment module (CP) mentioned in the report.
+         - Goal: Inform -> Vis/Presentation: Dynamic text panels. Interaction: Updated via JS state based on diagram clicks.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <!-- Sidebar Navigation -->
+    <nav class="w-full md:w-72 bg-fin-900 border-b md:border-b-0 md:border-r border-fin-700 flex flex-col justify-between shrink-0 sticky top-0 md:h-screen z-50">
+        <div>
+            <div class="p-6 border-b border-fin-700 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-fin-cyan to-fin-green flex items-center justify-center text-fin-950 font-heading font-bold text-xl shadow-[0_0_15px_rgba(0,242,255,0.3)]">
+                    FN
+                </div>
+                <div>
+                    <h1 class="font-heading font-bold text-white tracking-wide text-lg">FinNexus</h1>
+                    <p class="text-[10px] text-fin-cyan uppercase tracking-widest font-semibold">Arquitectura C4</p>
+                </div>
+            </div>
+            
+            <div class="p-4 space-y-2">
+                <button onclick="nav.switchTab('overview')" id="nav-overview" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors bg-fin-800 text-white border border-fin-cyan/30">
+                    <i class="fa-solid fa-layer-group w-5 text-fin-cyan"></i> Visión General
+                </button>
+                <button onclick="nav.switchTab('c1-context')" id="nav-c1-context" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors text-fin-text hover:bg-fin-800/50 hover:text-white border border-transparent">
+                    <i class="fa-solid fa-globe w-5 text-fin-text"></i> Nivel 1: Contexto
+                </button>
+                <button onclick="nav.switchTab('c2-containers')" id="nav-c2-containers" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors text-fin-text hover:bg-fin-800/50 hover:text-white border border-transparent">
+                    <i class="fa-solid fa-cubes w-5 text-fin-text"></i> Nivel 2: Contenedores
+                </button>
+                <button onclick="nav.switchTab('analysis')" id="nav-analysis" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors text-fin-text hover:bg-fin-800/50 hover:text-white border border-transparent">
+                    <i class="fa-solid fa-chart-radar w-5 text-fin-text"></i> Trade-offs y Análisis
+                </button>
+            </div>
+        </div>
+
+        <div class="p-6 border-t border-fin-700">
+            <div class="bg-fin-800/50 border border-fin-700 rounded-xl p-4">
+                <p class="text-xs text-fin-muted leading-relaxed">
+                    <i class="fa-solid fa-circle-info text-fin-cyan mr-1"></i> Informe interactivo basado en el documento de diseño arquitectónico del laboratorio C1 y C2.
+                </p>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow bg-fin-950 h-screen overflow-y-auto relative">
+        
+        <!-- SECTION 1: OVERVIEW -->
+        <section id="sec-overview" class="p-6 md:p-12 max-w-5xl mx-auto">
+            <div class="mb-10">
+                <h2 class="font-heading text-3xl md:text-5xl font-bold text-white mb-4">Arquitectura de Software: <span class="text-fin-cyan">FinNexus</span></h2>
+                <p class="text-lg text-fin-text leading-relaxed max-w-3xl">
+                    Este entorno interactivo documenta el diseño de arquitectura del sistema FinNexus utilizando los niveles 1 (Contexto) y 2 (Contenedores) del Modelo C4. El objetivo es mapear las interacciones de negocio de alto nivel y realizar un "zoom" técnico hacia los componentes lógicos.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-fin-900 border border-fin-700 rounded-2xl p-8 hover:border-fin-cyan/50 transition-colors">
+                    <div class="w-12 h-12 rounded-full bg-fin-cyan/10 flex items-center justify-center text-fin-cyan mb-4 text-2xl">
+                        <i class="fa-solid fa-wallet"></i>
+                    </div>
+                    <h3 class="font-heading text-xl font-bold text-white mb-2">La Super-App Híbrida</h3>
+                    <p class="text-sm text-fin-muted leading-relaxed">
+                        FinNexus permite a los usuarios realizar pagos con códigos QR de forma instantánea en el comercio local, al mismo tiempo que facilita la transferencia de excedentes hacia carteras de inversión de alto rendimiento.
+                    </p>
+                </div>
+                <div class="bg-fin-900 border border-fin-700 rounded-2xl p-8 hover:border-fin-green/50 transition-colors">
+                    <div class="w-12 h-12 rounded-full bg-fin-green/10 flex items-center justify-center text-fin-green mb-4 text-2xl">
+                        <i class="fa-solid fa-sitemap"></i>
+                    </div>
+                    <h3 class="font-heading text-xl font-bold text-white mb-2">Modelo C4</h3>
+                    <p class="text-sm text-fin-muted leading-relaxed">
+                        Utilizamos el Modelo C4 para comunicar la arquitectura a diferentes audiencias. Desde el Nivel 1 (Contexto para negocio y actores externos) hasta el Nivel 2 (Contenedores para decisiones tecnológicas de la pila).
+                    </p>
+                </div>
+            </div>
+            
+            <div class="mt-8 flex gap-4">
+                <button onclick="nav.switchTab('c1-context')" class="bg-fin-cyan/10 hover:bg-fin-cyan/20 text-fin-cyan border border-fin-cyan/50 px-6 py-3 rounded-xl font-medium transition-all text-sm flex items-center gap-2">
+                    Explorar Nivel 1 <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- SECTION 2: C1 CONTEXT -->
+        <section id="sec-c1-context" class="section-hidden p-6 md:p-12 max-w-6xl mx-auto flex flex-col h-full">
+            <div class="mb-6">
+                <h2 class="font-heading text-3xl font-bold text-white">Nivel 1: Diagrama de Contexto</h2>
+                <p class="text-sm text-fin-muted mt-2">Muestra cómo FinNexus se posiciona en el mundo exterior, identificando usuarios y dependencias externas. <strong class="text-fin-cyan">Haz clic en los elementos del diagrama</strong> para ver sus justificaciones arquitectónicas.</p>
+            </div>
+
+            <div class="flex flex-col lg:flex-row gap-8 flex-grow">
+                <!-- Diagram Area (Pure HTML/CSS layout representing C4) -->
+                <div class="w-full lg:w-3/5 bg-fin-900 border border-fin-700 rounded-3xl p-8 flex flex-col items-center justify-center relative min-h-[500px]">
+                    
+                    <!-- Top Ext System -->
+                    <div class="flex flex-col items-center mb-8 w-full">
+                        <div onclick="c4Logic.showDetails('c1', 'bancos')" id="node-bancos" class="c4-node bg-gray-800 border border-gray-600 rounded-xl p-4 w-48 text-center z-10">
+                            <span class="text-[10px] text-gray-400 font-bold uppercase block mb-1">[Sistema de Software]</span>
+                            <h4 class="text-white font-bold text-sm">Red de Bancos (QR)</h4>
+                            <p class="text-[10px] text-gray-400 mt-1">Liquidación P2P</p>
+                        </div>
+                        <div class="connector-v arrow-up h-12 flex items-center justify-center relative">
+                            <span class="absolute bg-fin-900 px-2 text-[10px] text-fin-muted whitespace-nowrap -ml-24">REST / HTTPS</span>
+                        </div>
+                    </div>
+
+                    <!-- Middle Row (Actors & Core) -->
+                    <div class="flex items-center justify-between w-full relative z-10">
+                        <!-- Actor 1 -->
+                        <div onclick="c4Logic.showDetails('c1', 'cliente')" id="node-cliente" class="c4-node bg-[#08427b] border border-[#1168bd] rounded-lg p-3 w-32 text-center flex flex-col items-center">
+                            <i class="fa-solid fa-user text-2xl text-white mb-2"></i>
+                            <span class="text-[10px] text-blue-200 font-bold uppercase block mb-1">[Persona]</span>
+                            <h4 class="text-white font-bold text-xs">Cliente FinNexus</h4>
+                        </div>
+
+                        <div class="connector-h arrow-right flex-grow flex items-center justify-center">
+                            <span class="absolute bg-fin-900 px-2 text-[10px] text-fin-muted -mt-6">Usa App</span>
+                        </div>
+
+                        <!-- CORE SYSTEM -->
+                        <div onclick="c4Logic.showDetails('c1', 'finnexus')" id="node-finnexus" class="c4-node active bg-[#1168bd] border-2 border-fin-cyan rounded-xl p-6 w-56 text-center shadow-[0_0_20px_rgba(0,242,255,0.2)]">
+                            <span class="text-[10px] text-blue-200 font-bold uppercase block mb-1">[Sistema de Software]</span>
+                            <h4 class="text-white font-heading font-bold text-lg">FinNexus</h4>
+                            <p class="text-xs text-blue-100 mt-2">Super-App Financiera Híbrida de pagos e inversión.</p>
+                        </div>
+
+                        <div class="connector-h arrow-right flex-grow flex items-center justify-center">
+                            <span class="absolute bg-fin-900 px-2 text-[10px] text-fin-muted -mt-6">REST</span>
+                        </div>
+
+                        <!-- Ext System 2 -->
+                        <div onclick="c4Logic.showDetails('c1', 'broker')" id="node-broker" class="c4-node bg-gray-800 border border-gray-600 rounded-xl p-3 w-36 text-center">
+                            <i class="fa-solid fa-chart-line text-xl text-gray-400 mb-2"></i>
+                            <span class="text-[10px] text-gray-400 font-bold uppercase block mb-1">[Sistema de Software]</span>
+                            <h4 class="text-white font-bold text-xs">Broker Inversiones</h4>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Row -->
+                    <div class="flex w-full mt-8 relative z-10">
+                        <div class="w-1/2 flex flex-col items-center">
+                            <div class="connector-v arrow-up h-12 flex items-center justify-center relative">
+                                <span class="absolute bg-fin-900 px-2 text-[10px] text-fin-muted whitespace-nowrap ml-16">Monitorea</span>
+                            </div>
+                            <div onclick="c4Logic.showDetails('c1', 'admin')" id="node-admin" class="c4-node bg-[#08427b] border border-[#1168bd] rounded-lg p-3 w-32 text-center flex flex-col items-center">
+                                <i class="fa-solid fa-user-shield text-xl text-white mb-2"></i>
+                                <span class="text-[10px] text-blue-200 font-bold uppercase block mb-1">[Persona]</span>
+                                <h4 class="text-white font-bold text-xs">Admin Sistema</h4>
+                            </div>
+                        </div>
+                        <div class="w-1/2 flex flex-col items-center">
+                            <div class="connector-v arrow-down h-12 flex items-center justify-center relative">
+                                <span class="absolute bg-fin-900 px-2 text-[10px] text-fin-muted whitespace-nowrap -ml-20">Webhooks</span>
+                            </div>
+                            <div onclick="c4Logic.showDetails('c1', 'n8n')" id="node-n8n" class="c4-node bg-gray-800 border border-gray-600 rounded-xl p-3 w-36 text-center">
+                                <i class="fa-solid fa-bell text-xl text-gray-400 mb-2"></i>
+                                <span class="text-[10px] text-gray-400 font-bold uppercase block mb-1">[Sistema de Software]</span>
+                                <h4 class="text-white font-bold text-xs">Alertas (n8n)</h4>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Info Panel -->
+                <div class="w-full lg:w-2/5 flex flex-col">
+                    <div class="bg-fin-800 border border-fin-700 rounded-3xl p-6 h-full flex flex-col">
+                        <div class="flex items-center gap-3 mb-4 border-b border-fin-700 pb-4">
+                            <div id="c1-panel-icon" class="w-10 h-10 rounded bg-[#1168bd] text-white flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-cubes"></i>
+                            </div>
+                            <div>
+                                <span id="c1-panel-type" class="text-[10px] font-bold text-fin-cyan uppercase tracking-wider block">Sistema Central</span>
+                                <h3 id="c1-panel-title" class="text-lg font-bold text-white">FinNexus (Core)</h3>
+                            </div>
+                        </div>
+                        <div class="flex-grow overflow-y-auto pr-2">
+                            <p id="c1-panel-desc" class="text-sm text-fin-text leading-relaxed mb-6">
+                                La super-app financiera híbrida que permite a los usuarios realizar pagos con códigos QR de forma instantánea y transferir excedentes a carteras de inversión de alto rendimiento.
+                            </p>
+                            
+                            <div id="c1-panel-justification-container" class="bg-fin-900 border-l-2 border-fin-cyan p-4 rounded-r-xl">
+                                <h4 class="text-xs font-bold text-white uppercase mb-2 flex items-center gap-2">
+                                    <i class="fa-solid fa-lightbulb text-fin-cyan"></i> Justificación Arquitectónica
+                                </h4>
+                                <p id="c1-panel-justification" class="text-xs text-fin-muted leading-relaxed">
+                                    Punto central de orquestación. Separa lógicamente el flujo diario de pagos (que exige latencia mínima) de las inversiones (que operan en horarios de mercado y requieren validación KYC). Esto evita que los cuellos de botella del mercado afecten la rapidez en comercios.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: C2 CONTAINERS -->
+        <section id="sec-c2-containers" class="section-hidden p-6 md:p-12 max-w-6xl mx-auto flex flex-col h-full">
+            <div class="mb-6">
+                <h2 class="font-heading text-3xl font-bold text-white">Nivel 2: Diagrama de Contenedores</h2>
+                <p class="text-sm text-fin-muted mt-2">Haciendo un "zoom" dentro de la caja negra de FinNexus, desarmamos el sistema en sus contenedores tecnológicos. <strong class="text-fin-green">Haz clic para ver las justificaciones.</strong></p>
+            </div>
+
+            <div class="flex flex-col lg:flex-row gap-8 flex-grow">
+                <!-- Diagram Area -->
+                <div class="w-full lg:w-3/5 bg-fin-900 border border-fin-700 rounded-3xl p-6 flex flex-col relative min-h-[600px] border-dashed border-2 border-fin-cyan/30">
+                    <span class="absolute top-2 left-4 text-xs font-bold text-fin-cyan uppercase">Límite del Sistema FinNexus (C2)</span>
+                    
+                    <div class="flex-grow flex flex-col items-center justify-between py-6 z-10 w-full max-w-md mx-auto">
+                        
+                        <!-- Frontend -->
+                        <div onclick="c4Logic.showDetails('c2', 'frontend')" id="node-frontend" class="c4-node active bg-[#438dd5] border border-[#1168bd] rounded-xl p-4 w-full text-center shadow-[0_0_15px_rgba(0,242,255,0.15)]">
+                            <span class="text-[10px] text-blue-100 font-bold uppercase block mb-1">[Contenedor: Aplicación SPA / Móvil]</span>
+                            <h4 class="text-white font-bold text-sm">Frontend SPA Híbrida</h4>
+                            <p class="text-[10px] text-blue-100 mt-1">Angular + Capacitor</p>
+                        </div>
+
+                        <div class="connector-v arrow-down h-10 w-full flex items-center justify-center">
+                            <span class="bg-fin-900 px-2 text-[9px] text-fin-muted relative z-10">HTTPS / JSON REST / WebSockets</span>
+                        </div>
+
+                        <!-- API Gateway -->
+                        <div onclick="c4Logic.showDetails('c2', 'gateway')" id="node-gateway" class="c4-node bg-[#438dd5] border border-[#1168bd] rounded-xl p-3 w-4/5 text-center">
+                            <span class="text-[10px] text-blue-100 font-bold uppercase block mb-1">[Contenedor: Aplicación API]</span>
+                            <h4 class="text-white font-bold text-sm">API Gateway</h4>
+                            <p class="text-[10px] text-blue-100 mt-1">Node.js / Express (Router y Seguridad)</p>
+                        </div>
+
+                        <!-- Splitter -->
+                        <div class="w-4/5 flex relative h-10">
+                            <div class="w-1/2 border-r-2 border-b-2 border-dashed border-[#4a5568] h-full arrow-down"></div>
+                            <div class="w-1/2 border-l-2 border-b-2 border-dashed border-[#4a5568] h-full arrow-down relative -left-[2px]"></div>
+                        </div>
+
+                        <!-- Microservices -->
+                        <div class="flex gap-4 w-full justify-between">
+                            <div onclick="c4Logic.showDetails('c2', 'ms-pagos')" id="node-ms-pagos" class="c4-node bg-[#438dd5] border border-[#1168bd] rounded-xl p-3 w-1/2 text-center">
+                                <span class="text-[9px] text-blue-100 font-bold uppercase block mb-1">[Contenedor: Microservicio]</span>
+                                <h4 class="text-white font-bold text-xs">MS Pagos QR</h4>
+                                <p class="text-[9px] text-blue-100 mt-1">Node.js / TypeScript</p>
+                            </div>
+                            <div onclick="c4Logic.showDetails('c2', 'ms-inversion')" id="node-ms-inversion" class="c4-node bg-[#438dd5] border border-[#1168bd] rounded-xl p-3 w-1/2 text-center">
+                                <span class="text-[9px] text-blue-100 font-bold uppercase block mb-1">[Contenedor: Microservicio]</span>
+                                <h4 class="text-white font-bold text-xs">MS Inversión</h4>
+                                <p class="text-[9px] text-blue-100 mt-1">Node.js / TypeScript</p>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-4 w-full justify-between h-8">
+                            <div class="w-1/2 flex justify-center"><div class="connector-v arrow-down h-full"></div></div>
+                            <div class="w-1/2 flex justify-center"><div class="connector-v arrow-down h-full"></div></div>
+                        </div>
+
+                        <!-- Databases -->
+                        <div class="flex gap-4 w-full justify-between">
+                            <div onclick="c4Logic.showDetails('c2', 'db-nosql')" id="node-db-nosql" class="c4-node bg-[#438dd5] border border-[#1168bd] rounded-xl rounded-t-none border-t-8 p-3 w-1/2 text-center">
+                                <i class="fa-solid fa-database text-blue-200 mb-1"></i>
+                                <span class="text-[9px] text-blue-100 font-bold uppercase block mb-1">[Contenedor: Base de Datos]</span>
+                                <h4 class="text-white font-bold text-xs">NoSQL DB</h4>
+                                <p class="text-[9px] text-blue-100 mt-1">Firebase / Firestore</p>
+                            </div>
+                            <div onclick="c4Logic.showDetails('c2', 'db-sql')" id="node-db-sql" class="c4-node bg-[#438dd5] border border-[#1168bd] rounded-xl rounded-t-none border-t-8 p-3 w-1/2 text-center">
+                                <i class="fa-solid fa-database text-blue-200 mb-1"></i>
+                                <span class="text-[9px] text-blue-100 font-bold uppercase block mb-1">[Contenedor: Base de Datos]</span>
+                                <h4 class="text-white font-bold text-xs">Relacional / Ledger</h4>
+                                <p class="text-[9px] text-blue-100 mt-1">PostgreSQL</p>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Info Panel -->
+                <div class="w-full lg:w-2/5 flex flex-col">
+                    <div class="bg-fin-800 border border-fin-700 rounded-3xl p-6 h-full flex flex-col">
+                        <div class="flex items-center gap-3 mb-4 border-b border-fin-700 pb-4">
+                            <div id="c2-panel-icon" class="w-10 h-10 rounded bg-[#438dd5] text-white flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-mobile-screen"></i>
+                            </div>
+                            <div>
+                                <span id="c2-panel-tech" class="text-[10px] font-bold text-fin-green uppercase tracking-wider block">Angular + Capacitor</span>
+                                <h3 id="c2-panel-title" class="text-lg font-bold text-white">Frontend SPA Híbrida</h3>
+                            </div>
+                        </div>
+                        <div class="flex-grow overflow-y-auto pr-2">
+                            <p id="c2-panel-desc" class="text-sm text-fin-text leading-relaxed mb-6">
+                                Entrega la interfaz de usuario web y nativa móvil para Android/iOS desde una única base de código. Se encarga de capturar la biometría táctil/facial y activar la cámara nativa para escanear los códigos QR.
+                            </p>
+                            
+                            <div class="bg-fin-900 border-l-2 border-fin-green p-4 rounded-r-xl">
+                                <h4 class="text-xs font-bold text-white uppercase mb-2 flex items-center gap-2">
+                                    <i class="fa-solid fa-code-branch text-fin-green"></i> Decisión Tecnológica (Trade-off)
+                                </h4>
+                                <p id="c2-panel-justification" class="text-xs text-fin-muted leading-relaxed">
+                                    ¿Por qué Angular + Capacitor? Provee un framework fuertemente tipado (TypeScript) e inyección de dependencias nativa, esencial para la mantenibilidad financiera. Usar Capacitor en lugar de nativo puro nos permite un Time to Market drásticamente menor mediante código reutilizable, atacando las limitaciones de presupuesto (ROI). Además, permite separar el frontend del backend para mayor escalabilidad.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 4: ANALYSIS (CHARTS) -->
+        <section id="sec-analysis" class="section-hidden p-6 md:p-12 max-w-5xl mx-auto">
+            <div class="mb-8 text-center">
+                <h2 class="font-heading text-3xl font-bold text-white mb-3">Análisis de Atributos de Calidad</h2>
+                <p class="text-sm text-fin-muted">Visualización de las implicaciones del Teorema CAP y trade-offs entre los módulos del sistema.</p>
+            </div>
+
+            <div class="bg-fin-900 border border-fin-700 rounded-3xl p-6 md:p-10 mb-8">
+                <h3 class="text-lg font-bold text-white text-center mb-6"><i class="fa-solid fa-scale-balanced text-fin-cyan mr-2"></i>Teorema CAP: Pagos QR vs. Inversiones</h3>
+                
+                <div class="flex flex-col md:flex-row items-center gap-8">
+                    <!-- Text Context -->
+                    <div class="w-full md:w-1/2 space-y-4">
+                        <div class="bg-fin-800/50 border border-fin-700 p-4 rounded-xl">
+                            <h4 class="text-fin-cyan font-bold text-sm mb-1">Módulo Pagos QR (Base NoSQL)</h4>
+                            <p class="text-xs text-fin-text">Prioriza la <strong>Disponibilidad (A)</strong> y <strong>Tolerancia a Particiones (P)</strong>. Si un nodo cae, el usuario debe poder pagar en la tienda (Consistencia eventual).</p>
+                        </div>
+                        <div class="bg-fin-800/50 border border-fin-700 p-4 rounded-xl">
+                            <h4 class="text-fin-green font-bold text-sm mb-1">Módulo Inversiones (Base Relacional)</h4>
+                            <p class="text-xs text-fin-text">Exige <strong>Consistencia Estricta (C)</strong> y <strong>Tolerancia a Particiones (P)</strong>. No se permite doble gasto; requiere transacciones ACID inmutables.</p>
+                        </div>
+                        <p class="text-xs text-fin-muted italic mt-4 border-l-2 border-fin-muted pl-3">
+                            * Justificación para usar bases de datos separadas (Firestore vs PostgreSQL) en el Nivel C2 de FinNexus.
+                        </p>
+                    </div>
+
+                    <!-- CHART CONTAINER (MANDATORY STRUCTURE) -->
+                    <div class="w-full md:w-1/2">
+                        <div class="chart-container">
+                            <canvas id="capChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Additional Context Box -->
+                <div class="bg-fin-900 border border-fin-700 rounded-2xl p-6">
+                    <h4 class="text-white font-bold text-sm mb-3 border-b border-fin-700 pb-2">Protocolos de Comunicación (C2)</h4>
+                    <ul class="space-y-3">
+                        <li class="flex items-start gap-3">
+                            <i class="fa-solid fa-lock text-fin-cyan mt-0.5"></i>
+                            <div>
+                                <span class="text-xs font-bold text-white block">HTTPS / TLS 1.3</span>
+                                <span class="text-[11px] text-fin-muted">Obligatorio para asegurar cifrado financiero.</span>
+                            </div>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <i class="fa-solid fa-exchange-alt text-fin-green mt-0.5"></i>
+                            <div>
+                                <span class="text-xs font-bold text-white block">REST</span>
+                                <span class="text-[11px] text-fin-muted">Simplifica integraciones CRUD básicas.</span>
+                            </div>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <i class="fa-solid fa-bolt text-amber-400 mt-0.5"></i>
+                            <div>
+                                <span class="text-xs font-bold text-white block">WebSockets</span>
+                                <span class="text-[11px] text-fin-muted">Solo para precios de bolsa en tiempo real, evitando sobrecarga de servidor.</span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="bg-fin-900 border border-fin-700 rounded-2xl p-6 flex flex-col justify-center text-center">
+                    <i class="fa-solid fa-shield-halved text-4xl text-fin-cyan mb-3"></i>
+                    <h4 class="text-white font-bold text-lg mb-2">Arquitectura Ultra-Segura</h4>
+                    <p class="text-xs text-fin-text">El uso de un API Gateway centralizado permite gestionar la autenticación (JWT) y encriptación de payloads antes de tocar los microservicios core, cumpliendo el atributo primario de Seguridad.</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Application Logic -->
+    <script>
+        // Data Storage: Extracts textual information from the source report for interactive panels.
+        const archData = {
+            c1: {
+                bancos: {
+                    title: "Red de Bancos (QR)", type: "Sistema Externo", icon: "fa-building-columns",
+                    desc: "API bancaria externa (Cámara de Compensación) para liquidar transferencias P2P e interbancarias de forma inmediata.",
+                    justification: "Sistema legado externo que proporciona la infraestructura nacional de liquidación. Se conecta vía HTTPS/REST seguro."
+                },
+                cliente: {
+                    title: "Cliente FinNexus", type: "Actor (Usuario Final)", icon: "fa-user",
+                    desc: "Persona natural que utiliza la billetera para consumos diarios y gestión de microinversiones.",
+                    justification: "El centro de la experiencia UX. Su interacción inicial es el desencadenante de los flujos de lectura (saldos) y escritura (pagos/inversión)."
+                },
+                finnexus: {
+                    title: "FinNexus (Core)", type: "Sistema Central", icon: "fa-cubes",
+                    desc: "La super-app financiera híbrida que permite a los usuarios realizar pagos con códigos QR de forma instantánea y transferir excedentes a carteras de inversión de alto rendimiento.",
+                    justification: "Punto central de orquestación. Separa lógicamente el flujo diario de pagos (que exige latencia mínima) de las inversiones (que operan en horarios de mercado y requieren validación KYC). Esto evita que los cuellos de botella del mercado afecten la rapidez en comercios."
+                },
+                broker: {
+                    title: "Broker de Valores Integrado", type: "Sistema Externo", icon: "fa-chart-line",
+                    desc: "API del Broker de corretaje financiero encargado de ejecutar las órdenes de compra/venta de activos reales en la bolsa de valores.",
+                    justification: "¿Por qué es externo? Debido a regulaciones financieras, FinNexus no puede captar dinero para inversiones directamente sin licencias. Delegar al Broker mitiga riesgos legales de cumplimiento y transfiere la custodia del activo al ente autorizado."
+                },
+                admin: {
+                    title: "Administrador del Sistema", type: "Actor (Interno)", icon: "fa-user-shield",
+                    desc: "Personal técnico y financiero interno que audita transacciones, gestiona parámetros de riesgo y monitorea la salud del sistema.",
+                    justification: "Garantiza la operatividad y auditoría. Interactúa con dashboards de observabilidad."
+                },
+                n8n: {
+                    title: "Sistema de Alertas (n8n/Slack)", type: "Sistema Externo", icon: "fa-bell",
+                    desc: "Orquestador externo para alertas automáticas ante transacciones sospechosas o alertas de rendimiento financiero.",
+                    justification: "Se delega el flujo de trabajo de alertas a una herramienta especializada (n8n) para no sobrecargar el core bancario con lógica de notificaciones de negocio."
+                }
+            },
+            c2: {
+                frontend: {
+                    title: "Frontend SPA Híbrida", tech: "Angular + Capacitor", icon: "fa-mobile-screen",
+                    desc: "Entrega la interfaz de usuario web y nativa móvil para Android/iOS desde una única base de código. Captura biometría y escanea QR.",
+                    justification: "¿Por qué Angular + Capacitor? Provee un framework fuertemente tipado (TypeScript) e inyección de dependencias. Usar Capacitor permite un Time to Market menor (ROI) con código reutilizable. Separarlo del backend garantiza el atributo de Escalabilidad."
+                },
+                gateway: {
+                    title: "API Gateway", tech: "Node.js / Express", icon: "fa-network-wired",
+                    desc: "Centraliza la autenticación (JWT/Firebase Auth), la encriptación de payloads, y redirige de forma segura el tráfico.",
+                    justification: "Actúa como barrera de seguridad única y router. Reduce la complejidad en los microservicios internos que ya no deben preocuparse por validar tokens globalmente."
+                },
+                'ms-pagos': {
+                    title: "Microservicio Pagos QR", tech: "Node.js / TypeScript", icon: "fa-qrcode",
+                    desc: "Procesa transferencias de saldo inmediatas, generación y escaneo de códigos QR.",
+                    justification: "Módulo crítico para la operación diaria. Desacoplado para escalar de forma independiente si la carga transaccional en comercios aumenta (Black Friday, etc)."
+                },
+                'ms-inversion': {
+                    title: "Microservicio Inversión", tech: "Node.js / Motores Estadísticos", icon: "fa-arrow-trend-up",
+                    desc: "Automatiza transferencia a broker, calcula estimaciones de rendimiento en tiempo real y gestiona carteras.",
+                    justification: "Módulo con lógica matemática pesada. Separado del de pagos para que los cálculos de bolsa no afecten la latencia de una transferencia P2P."
+                },
+                'db-nosql': {
+                    title: "Base de Datos NoSQL", tech: "Firebase / Firestore", icon: "fa-database",
+                    desc: "Almacena catálogos, configuraciones rápidas de cuentas y estado de sesión.",
+                    justification: "Teorema CAP: El módulo de Pagos prioriza la Disponibilidad y Tolerancia a Particiones (AP). Si un nodo cae, el usuario debe poder pagar igual, por lo que una base NoSQL es idónea por su consistencia eventual."
+                },
+                'db-sql': {
+                    title: "Base de Datos Relacional", tech: "PostgreSQL", icon: "fa-database",
+                    desc: "Registro de movimientos transaccionales con cumplimiento estricto ACID.",
+                    justification: "Teorema CAP: El módulo de Inversiones exige Consistencia Estricta (CP). No podemos permitir doble gasto. Se justifica un motor relacional para garantizar transacciones inmutables."
+                }
+            }
+        };
+
+        // State Management & Navigation
+        const nav = {
+            currentTab: 'overview',
+            switchTab: function(tabId) {
+                // Update buttons
+                document.querySelectorAll('nav button').forEach(btn => {
+                    btn.classList.remove('bg-fin-800', 'text-white', 'border-fin-cyan/30');
+                    btn.classList.add('text-fin-text', 'border-transparent');
+                    btn.querySelector('i').classList.remove('text-fin-cyan');
+                });
+                
+                const activeBtn = document.getElementById(`nav-${tabId}`);
+                activeBtn.classList.remove('text-fin-text', 'border-transparent');
+                activeBtn.classList.add('bg-fin-800', 'text-white', 'border-fin-cyan/30');
+                activeBtn.querySelector('i').classList.add('text-fin-cyan');
+
+                // Update sections
+                document.querySelectorAll('main section').forEach(sec => sec.classList.add('section-hidden'));
+                document.getElementById(`sec-${tabId}`).classList.remove('section-hidden');
+
+                this.currentTab = tabId;
+
+                // Render chart only when tab is visible to ensure proper sizing
+                if (tabId === 'analysis' && !window.chartRendered) {
+                    renderChart();
+                    window.chartRendered = true;
+                }
+            }
+        };
+
+        // Core Interaction Handling (C4 Diagrams)
+        const c4Logic = {
+            showDetails: function(level, nodeId) {
+                // Update UI active states
+                const container = document.getElementById(`sec-${level}-context`) || document.getElementById(`sec-${level}-containers`);
+                container.querySelectorAll('.c4-node').forEach(node => node.classList.remove('active'));
+                document.getElementById(`node-${nodeId}`).classList.add('active');
+
+                // Retrieve Data
+                const data = archData[level][nodeId];
+
+                // Update DOM based on level
+                if (level === 'c1') {
+                    document.getElementById('c1-panel-title').innerText = data.title;
+                    document.getElementById('c1-panel-type').innerText = data.type;
+                    document.getElementById('c1-panel-desc').innerText = data.desc;
+                    document.getElementById('c1-panel-justification').innerText = data.justification;
+                    document.getElementById('c1-panel-icon').innerHTML = `<i class="fa-solid ${data.icon}"></i>`;
+                    
+                    // Style icon container based on type
+                    const iconBox = document.getElementById('c1-panel-icon');
+                    iconBox.className = 'w-10 h-10 rounded text-white flex items-center justify-center text-lg';
+                    if (data.type.includes('Actor')) iconBox.classList.add('bg-[#08427b]');
+                    else if (data.type.includes('Externo')) iconBox.classList.add('bg-gray-800');
+                    else iconBox.classList.add('bg-[#1168bd]');
+                } 
+                else if (level === 'c2') {
+                    document.getElementById('c2-panel-title').innerText = data.title;
+                    document.getElementById('c2-panel-tech').innerText = data.tech;
+                    document.getElementById('c2-panel-desc').innerText = data.desc;
+                    document.getElementById('c2-panel-justification').innerText = data.justification;
+                    document.getElementById('c2-panel-icon').innerHTML = `<i class="fa-solid ${data.icon}"></i>`;
+                }
+            }
+        };
+
+        // Chart.js Implementation
+        function renderChart() {
+            const ctx = document.getElementById('capChart').getContext('2d');
+            
+            // Configuring Chart.js per requirements (maintainAspectRatio: false inside container)
+            new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: [
+                        ['Disponibilidad', '(Availability)'], 
+                        ['Consistencia', '(Consistency)'], 
+                        ['Tolerancia Partición', '(Partition Tol.)'], 
+                        ['Velocidad / Latencia'], 
+                        ['Complejidad Transaccional']
+                    ],
+                    datasets: [{
+                        label: 'Módulo Pagos QR (NoSQL)',
+                        data: [95, 60, 90, 95, 40],
+                        backgroundColor: 'rgba(0, 242, 255, 0.2)',
+                        borderColor: '#00f2ff',
+                        pointBackgroundColor: '#00f2ff',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: '#00f2ff',
+                        borderWidth: 2
+                    }, {
+                        label: 'Módulo Inversiones (SQL)',
+                        data: [70, 98, 90, 60, 95],
+                        backgroundColor: 'rgba(112, 255, 0, 0.2)',
+                        borderColor: '#70ff00',
+                        pointBackgroundColor: '#70ff00',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: '#70ff00',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false, // Ensures it respects the .chart-container height
+                    scales: {
+                        r: {
+                            angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            pointLabels: {
+                                color: '#cbd5e0',
+                                font: { family: "'Plus Jakarta Sans', sans-serif", size: 11 }
+                            },
+                            ticks: {
+                                display: false, // Hide internal numbers for cleaner look
+                                min: 0,
+                                max: 100
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#cbd5e0',
+                                padding: 20,
+                                font: { family: "'Plus Jakarta Sans', sans-serif", size: 12 }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(10, 14, 20, 0.9)',
+                            titleColor: '#00f2ff',
+                            bodyColor: '#fff',
+                            borderColor: '#1a202c',
+                            borderWidth: 1,
+                            padding: 10,
+                            displayColors: true,
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.raw + ' (Importancia Relativa)';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
